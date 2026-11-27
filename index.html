@@ -36,7 +36,7 @@ button:focus-visible{outline:3px solid #5143b2;outline-offset:2px;z-index:1}
 <body>
 <main>
 <header><h1>拼拼樂</h1><span>30 秒拼圖</span></header>
-<p>點兩塊交換位置，照右邊拼回圖案；每完成一張得 100 分。</p>
+<p>點兩塊交換位置。每塊放對得 10 分，九塊全對以 100 分結算。</p>
 <section class="stats" aria-label="本局資訊">
 <div class="stat"><span>剩餘</span><strong><span id="seconds">30</span> 秒</strong></div>
 <div class="stat"><span>分數</span><strong id="score">0</strong></div>
@@ -153,17 +153,12 @@ function render() {
 function shuffle() {
   order = [...solved];
   const pool = [...solved];
-  for (let i = 0; i < 4; i++) {
-    const index = Math.floor(Math.random() * pool.length);
-    const position = pool.splice(index, 1)[0];
-    const first = i % 2;
-    if (first === 0) {
-      selected = position;
-    } else {
-      [order[selected], order[position]] = [order[position], order[selected]];
-    }
+  while (pool.length > 0) {
+    const [a, b, c] = Array.from({length: 3}, () =>
+      pool.splice(Math.floor(Math.random() * pool.length), 1)[0]
+    );
+    [order[a], order[b], order[c]] = [order[b], order[c], order[a]];
   }
-  selected = -1;
 }
 function updateClock() {
   const remaining = Math.max(0, (deadline - performance.now()) / 1000);
@@ -195,14 +190,14 @@ function pick(position) {
   } else {
     [order[selected], order[position]] = [order[position], order[selected]];
     selected = -1;
-    if (order.every((id, index) => id === index)) {
-      score += 100;
-      get("score").textContent = score;
-      status.textContent = "拼好了！＋100 分，繼續下一張。";
-      shuffle();
-    } else {
-      status.textContent = "";
+    const correct = order.filter((id, index) => id === index).length;
+    score = correct === solved.length ? 100 : correct * 10;
+    get("score").textContent = score;
+    if (score === 100) {
+      endRound("全部拼對！");
+      return;
     }
+    status.textContent = "已拼對 " + correct + "／" + solved.length + " 塊。";
   }
   render();
 }
