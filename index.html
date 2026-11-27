@@ -28,6 +28,7 @@ button.tile{cursor:pointer;touch-action:manipulation}
 button:focus-visible{outline:3px solid #5143b2;outline-offset:2px;z-index:1}
 .actions{margin-top:14px}
 #start,#finish{background:#25261e;color:#fffdf6;border:0;border-radius:12px;font:inherit;font-weight:800;padding:13px 24px;min-height:48px;cursor:pointer}
+#music{min-height:48px;padding:8px 14px;border:1px solid #c7c6b3;border-radius:12px;background:#fffdf6;color:inherit;font:inherit;cursor:pointer}
 #status{min-height:24px;margin:8px 0 0;color:#42463b}
 @media(max-width:370px){.play{grid-template-columns:minmax(0,1fr) 68px;gap:9px}.stat{padding-inline:9px}}
 </style>
@@ -45,7 +46,7 @@ button:focus-visible{outline:3px solid #5143b2;outline-offset:2px;z-index:1}
 <div class="board" id="board" aria-label="拼圖區"></div>
 <aside><p>完成圖</p><div class="preview" id="preview" aria-hidden="true"></div></aside>
 </div>
-<div class="actions"><button id="start" type="button">開始挑戰</button> <button id="finish" type="button" hidden>完成</button><p id="status" role="status"></p></div>
+<div class="actions"><button id="start" type="button">開始挑戰</button> <button id="finish" type="button" hidden>完成</button> <button id="music" type="button" aria-pressed="true">背景音樂</button><p id="status" role="status"></p></div>
 </main>
 <script>
 const duration = 30;
@@ -65,6 +66,57 @@ const get = id => document.getElementById(id);
 const start = get("start");
 const finish = get("finish");
 const status = get("status");
+const music = get("music");
+const AudioEngine = window.AudioContext || window.webkitAudioContext;
+const melody = [72,76,79,76,74,77,81,77,76,79,84,79,74,77,79,71];
+let audio;
+let musicTimer;
+let note = 0;
+let musicEnabled = Boolean(AudioEngine);
+music.hidden = !AudioEngine;
+
+function playNote() {
+  if (audio.state !== "running") return;
+  const time = audio.currentTime;
+  const oscillator = audio.createOscillator();
+  const volume = audio.createGain();
+  oscillator.type = "triangle";
+  oscillator.frequency.value = 440 * 2 ** ((melody[note] - 69) / 12);
+  volume.gain.setValueAtTime(0, time);
+  volume.gain.linearRampToValueAtTime(0.045, time + 0.025);
+  volume.gain.exponentialRampToValueAtTime(0.001, time + 0.20);
+  oscillator.connect(volume);
+  volume.connect(audio.destination);
+  oscillator.start(time);
+  oscillator.stop(time + 0.21);
+  oscillator.onended = () => volume.disconnect();
+  note = (note + 1) % melody.length;
+}
+
+function stopMusic() {
+  clearInterval(musicTimer);
+  musicTimer = undefined;
+  if (audio) audio.suspend().catch(() => {});
+}
+
+function startMusic() {
+  if (!musicEnabled || musicTimer !== undefined) return;
+  try {
+    audio ??= new AudioEngine();
+    audio.resume().catch(() => {});
+  } catch {
+    return;
+  }
+  note = 0;
+  musicTimer = setInterval(playNote, 230);
+}
+
+music.addEventListener("click", () => {
+  musicEnabled = !musicEnabled;
+  music.setAttribute("aria-pressed", String(musicEnabled));
+  if (!musicEnabled) stopMusic();
+  else if (playing) startMusic();
+});
 let order = [...solved];
 let selected = -1;
 let score = 0;
@@ -121,6 +173,7 @@ function updateClock() {
 }
 function endRound(reason) {
   clearInterval(timer);
+  stopMusic();
   finish.hidden = true;
   playing = false;
   selected = -1;
@@ -168,6 +221,7 @@ start.addEventListener("click", () => {
   status.textContent = "";
   shuffle();
   playing = true;
+  startMusic();
   deadline = performance.now() + duration * 1000;
   start.disabled = true;
   start.hidden = true;
